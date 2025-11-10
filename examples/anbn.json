@@ -1,0 +1,11 @@
+{
+  "name": "a^n b^n",
+  "type": "Tipo 2",
+  "nonTerminals": ["S"],
+  "terminals": ["a", "b"],
+  "productions": [
+    { "left": "S", "right": "aSb" },
+    { "left": "S", "right": "ε" }
+  ],
+  "startSymbol": "S"
+}

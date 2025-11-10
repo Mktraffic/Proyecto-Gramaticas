@@ -1,0 +1,15 @@
+{
+  "name": "Expresiones Aritméticas Simples",
+  "type": "Tipo 2",
+  "nonTerminals": ["E", "T", "F"],
+  "terminals": ["id", "+", "*", "(", ")"],
+  "productions": [
+    { "left": "E", "right": "E+T" },
+    { "left": "E", "right": "T" },
+    { "left": "T", "right": "T*F" },
+    { "left": "T", "right": "F" },
+    { "left": "F", "right": "(E)" },
+    { "left": "F", "right": "id" }
+  ],
+  "startSymbol": "E"
+}

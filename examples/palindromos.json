@@ -1,0 +1,14 @@
+{
+  "name": "Palíndromos",
+  "type": "Tipo 2",
+  "nonTerminals": ["S"],
+  "terminals": ["a", "b"],
+  "productions": [
+    { "left": "S", "right": "aSa" },
+    { "left": "S", "right": "bSb" },
+    { "left": "S", "right": "a" },
+    { "left": "S", "right": "b" },
+    { "left": "S", "right": "ε" }
+  ],
+  "startSymbol": "S"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Números Binarios",
+  "type": "Tipo 3",
+  "nonTerminals": ["S", "A"],
+  "terminals": ["0", "1"],
+  "productions": [
+    { "left": "S", "right": "0A" },
+    { "left": "S", "right": "1A" },
+    { "left": "A", "right": "0A" },
+    { "left": "A", "right": "1A" },
+    { "left": "A", "right": "ε" }
+  ],
+  "startSymbol": "S"
+}

@@ -205,10 +205,15 @@ Cadenas aceptadas: ε, a, b, aa, bb, aba, bab, aaa, ...
 - Use **ε** (epsilon) para representar la cadena vacía
 - Los terminales pueden ser caracteres individuales o tokens (ej: "id", "+")
 
-## 📧 Autor
+## 📧 Autores
 
 Proyecto desarrollado para el curso de Teoría de Lenguajes Formales y Autómatas
 UPTC - Universidad Pedagógica y Tecnológica de Colombia
+
+**Desarrolladores:**
+- David Santiago Lotero (GitHub.com/Mktraffic)
+- Nicolas Danilo Muñoz (GitHub.com/NicolasDaniloMunozAldana)
+- Diego Alejandro Rodríguez (GitHub.com/Diegosch1)
 
 ## 📄 Licencia
 

@@ -1,6 +1,34 @@
 import { Grammar } from '@/types/grammar';
 
 /**
+ * Divide un string en símbolos (terminales o no terminales) usando coincidencia voraz.
+ * Retorna null si no puede tokenizarse con los símbolos de la gramática.
+ */
+export function splitToSymbols(s: string, grammar: Grammar): string[] | null {
+  if (s === '' || s === 'ε') return [];
+  const candidates = [...grammar.terminals, ...grammar.nonTerminals].sort((a, b) => b.length - a.length);
+  const res: string[] = [];
+  let i = 0;
+  while (i < s.length) {
+    let matched = false;
+    for (const c of candidates) {
+      if (s.startsWith(c, i)) {
+        res.push(c);
+        i += c.length;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) return null;
+  }
+  return res;
+}
+
+export function joinSymbols(tokens: string[]): string {
+  return tokens.length === 0 ? '' : tokens.join('');
+}
+
+/**
  * Utilidades para persistencia de gramáticas
  */
 
@@ -112,34 +140,57 @@ export function readFileAsText(file: File): Promise<string> {
 export function validateType3Grammar(grammar: Grammar): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  for (const prod of grammar.productions) {
-    const right = prod.right;
-    
-    // Permitir producción vacía
-    if (right === 'ε' || right === '') continue;
+  // Helper: divide el lado derecho en símbolos (terminales o no terminales) usando coincidencia voraz (longest-match)
+  const splitToSymbols = (s: string): string[] | null => {
+    if (s === '' || s === 'ε') return [];
+    const candidates = [...grammar.terminals, ...grammar.nonTerminals].sort((a, b) => b.length - a.length);
+    const res: string[] = [];
+    let i = 0;
+    while (i < s.length) {
+      let matched = false;
+      for (const c of candidates) {
+        if (s.startsWith(c, i)) {
+          res.push(c);
+          i += c.length;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) return null;
+    }
+    return res;
+  };
 
-    // Verificar longitud (máximo 2 símbolos)
-    if (right.length > 2) {
+  for (const prod of grammar.productions) {
+    const tokens = splitToSymbols(prod.right);
+    if (tokens === null) {
+      errors.push(`Producción ${prod.left} → ${prod.right}: contiene símbolos desconocidos`);
+      continue;
+    }
+
+    // Permitir producción vacía
+    if (tokens.length === 0) continue;
+
+    // Verificar número de símbolos (máximo 2 para Tipo 3)
+    if (tokens.length > 2) {
       errors.push(`Producción ${prod.left} → ${prod.right}: demasiado larga para Tipo 3`);
       continue;
     }
 
-    // Un símbolo: debe ser terminal
-    if (right.length === 1) {
-      if (!grammar.terminals.includes(right)) {
+    if (tokens.length === 1) {
+      // Un símbolo: debe ser terminal
+      const t = tokens[0];
+      if (!grammar.terminals.includes(t)) {
         errors.push(`Producción ${prod.left} → ${prod.right}: símbolo único debe ser terminal`);
       }
       continue;
     }
 
     // Dos símbolos: terminal + no terminal o no terminal + terminal
-    if (right.length === 2) {
-      const first = right[0];
-      const second = right[1];
-      
+    if (tokens.length === 2) {
+      const [first, second] = tokens;
       const isValidRight = grammar.terminals.includes(first) && grammar.nonTerminals.includes(second);
       const isValidLeft = grammar.nonTerminals.includes(first) && grammar.terminals.includes(second);
-      
       if (!isValidRight && !isValidLeft) {
         errors.push(`Producción ${prod.left} → ${prod.right}: debe ser (terminal)(no-terminal) o (no-terminal)(terminal)`);
       }
@@ -157,17 +208,35 @@ export function validateType2Grammar(grammar: Grammar): { valid: boolean; errors
   const errors: string[] = [];
 
   for (const prod of grammar.productions) {
-    // El lado izquierdo debe ser un único no terminal
-    if (prod.left.length !== 1) {
-      errors.push(`Producción ${prod.left} → ${prod.right}: lado izquierdo debe ser un único símbolo`);
+    // El lado izquierdo debe ser un no terminal definido en la gramática
+    if (!grammar.nonTerminals.includes(prod.left)) {
+      errors.push(`Producción ${prod.left} → ${prod.right}: lado izquierdo debe ser un no terminal definido`);
       continue;
     }
 
-    if (!grammar.nonTerminals.includes(prod.left)) {
-      errors.push(`Producción ${prod.left} → ${prod.right}: lado izquierdo debe ser no terminal`);
-    }
+    // No hay restricciones estrictas en el lado derecho para Tipo 2,
+    // pero debe ser tokenizable usando los símbolos definidos.
+    const candidates = [...grammar.terminals, ...grammar.nonTerminals].sort((a, b) => b.length - a.length);
+    const splitRight = (s: string): boolean => {
+      if (s === '' || s === 'ε') return true;
+      let i = 0;
+      while (i < s.length) {
+        let matched = false;
+        for (const c of candidates) {
+          if (s.startsWith(c, i)) {
+            i += c.length;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) return false;
+      }
+      return true;
+    };
 
-    // El lado derecho puede ser cualquier combinación (no hay restricción para Tipo 2)
+    if (!splitRight(prod.right)) {
+      errors.push(`Producción ${prod.left} → ${prod.right}: contiene símbolos no reconocidos`);
+    }
   }
 
   return { valid: errors.length === 0, errors };

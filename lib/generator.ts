@@ -1,4 +1,5 @@
 import { Grammar, GeneratedString } from '@/types/grammar';
+import { splitToSymbols, joinSymbols } from '@/lib/grammarUtils';
 
 /**
  * Generador de cadenas para gramáticas
@@ -18,10 +19,11 @@ export class StringGenerator {
    */
   generateStrings(count: number = 10): GeneratedString[] {
     const results: GeneratedString[] = [];
-    const seen = new Set<string>();
+    const seenForms = new Set<string>();
+    const seenResults = new Set<string>();
     
-    // Cola para BFS: [forma sentencial, profundidad]
-    const queue: [string, number][] = [[this.grammar.startSymbol, 0]];
+    // Cola para BFS: [forma sentencial tokens, profundidad]
+    const queue: [string[], number][] = [[[this.grammar.startSymbol], 0]];
     
     let iterations = 0;
     const maxIterations = 50000;
@@ -36,16 +38,15 @@ export class StringGenerator {
 
       // Verificar si es una cadena terminal (pertenece al lenguaje)
       if (this.isTerminalString(current)) {
-        const value = current === '' ? 'ε' : current;
-        
-        if (!seen.has(value)) {
-          seen.add(value);
+        const display = joinSymbols(current) === '' ? 'ε' : joinSymbols(current);
+        if (!seenResults.has(display)) {
+          seenResults.add(display);
           results.push({
-            value: value,
-            length: current.length
+            value: display,
+            length: display === 'ε' ? 0 : display.length
           });
         }
-        
+
         if (results.length >= count) break;
         continue;
       }
@@ -77,16 +78,17 @@ export class StringGenerator {
       });
 
       for (const prod of applicableProductions) {
-        const rightSide = prod.right === 'ε' ? '' : prod.right;
-        
-        const newString = 
-          current.substring(0, firstNonTerminalIndex) +
-          rightSide +
-          current.substring(firstNonTerminalIndex + 1);
+        const rightTokens = splitToSymbols(prod.right, this.grammar) || [];
+        const newTokens = [
+          ...current.slice(0, firstNonTerminalIndex),
+          ...rightTokens,
+          ...current.slice(firstNonTerminalIndex + 1)
+        ];
 
-        // Solo agregar si no hemos visto esta forma sentencial
-        if (!seen.has(newString)) {
-          queue.push([newString, depth + 1]);
+        const key = newTokens.join(' ');
+        if (!seenForms.has(key)) {
+          seenForms.add(key);
+          queue.push([newTokens, depth + 1]);
         }
       }
     }
@@ -105,15 +107,16 @@ export class StringGenerator {
   /**
    * Verifica si una cadena contiene solo símbolos terminales
    */
-  private isTerminalString(str: string): boolean {
-    if (str === '') return true; // Cadena vacía es válida
-    
-    for (const char of str) {
-      if (!this.grammar.terminals.includes(char)) {
-        return false;
-      }
+  private isTerminalString(tokens: string[] | string): boolean {
+    if (typeof tokens === 'string') {
+      const normalized = tokens === 'ε' ? '' : tokens.replace(/\s+/g, '');
+      const tks = splitToSymbols(normalized, this.grammar);
+      if (tks === null) return false;
+      return tks.every(t => this.grammar.terminals.includes(t));
     }
-    return true;
+    if (!Array.isArray(tokens)) return false;
+    if (tokens.length === 0) return true;
+    return tokens.every(t => this.grammar.terminals.includes(t));
   }
 
   /**
@@ -124,8 +127,9 @@ export class StringGenerator {
   generateUpToLength(maxLength: number): GeneratedString[] {
     const results: GeneratedString[] = [];
     const seen = new Set<string>();
-    
-    const queue: string[] = [this.grammar.startSymbol];
+    const seenValues = new Set<string>();
+
+    const queue: string[][] = [[this.grammar.startSymbol]];
     let iterations = 0;
     const maxIterations = 50000;
 
@@ -133,38 +137,38 @@ export class StringGenerator {
       iterations++;
       const current = queue.shift()!;
 
-      if (seen.has(current)) continue;
-      seen.add(current);
+      const key = current.join(' ');
+      if (seen.has(key)) continue;
+      seen.add(key);
 
-      // Si es terminal y no excede la longitud máxima
-      if (this.isTerminalString(current) && current.length <= maxLength) {
-        const value = current === '' ? 'ε' : current;
-        if (!results.some(r => r.value === value)) {
-          results.push({
-            value: value,
-            length: current.length
-          });
+      const display = joinSymbols(current) === '' ? 'ε' : joinSymbols(current);
+
+      // Si es terminal y no excede la longitud máxima (en caracteres)
+      if (this.isTerminalString(current) && display.length <= maxLength) {
+        if (!seenValues.has(display)) {
+          seenValues.add(display);
+          results.push({ value: display, length: display === 'ε' ? 0 : display.length });
         }
         continue;
       }
 
-      // Si ya es muy largo, no continuar
+      // Si ya es muy largo, no continuar (número de tokens)
       if (current.length > maxLength * 2) continue;
 
-      // Expandir con producciones
+      // Expandir con producciones: expandir primer no terminal
       for (let i = 0; i < current.length; i++) {
         if (this.grammar.nonTerminals.includes(current[i])) {
           const nonTerminal = current[i];
-          
           for (const prod of this.grammar.productions) {
             if (prod.left === nonTerminal) {
-              const rightSide = prod.right === 'ε' ? '' : prod.right;
-              const newString = 
-                current.substring(0, i) + rightSide + current.substring(i + 1);
-              
-              if (!seen.has(newString) && newString.length <= maxLength * 2) {
-                queue.push(newString);
-              }
+              const rightTokens = splitToSymbols(prod.right, this.grammar) || [];
+              const newTokens = [
+                ...current.slice(0, i),
+                ...rightTokens,
+                ...current.slice(i + 1)
+              ];
+              const newKey = newTokens.join(' ');
+              if (!seen.has(newKey)) queue.push(newTokens);
             }
           }
           break; // Solo expandir el primer no terminal
@@ -174,9 +178,7 @@ export class StringGenerator {
 
     // Ordenar resultados
     results.sort((a, b) => {
-      if (a.length !== b.length) {
-        return a.length - b.length;
-      }
+      if (a.length !== b.length) return a.length - b.length;
       return a.value.localeCompare(b.value);
     });
 

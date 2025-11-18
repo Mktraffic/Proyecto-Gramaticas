@@ -4,7 +4,7 @@
 
 **Proyecto:** Analizador de Gramáticas Formales
 **Curso:** Teoría de Lenguajes Formales y Autómatas
-**Universidad:** Universidad de Santiago de Chile
+**Universidad:** UPTC - Universidad Pedagógica y Tecnológica de Colombia
 **Semestre:** Séptimo Semestre - 2024
 
 ## 🎯 Objetivos Cumplidos

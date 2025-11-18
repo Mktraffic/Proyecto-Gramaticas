@@ -92,6 +92,17 @@ export default function Home() {
         <div className="mb-6 bg-white rounded-lg shadow-lg p-4">
           <h3 className="text-lg font-semibold mb-3 text-gray-800">Gramáticas de Ejemplo:</h3>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setCurrentGrammar(null);
+                setShowForm(true);
+                setParseResult(null);
+                setGeneratedStrings([]);
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-semibold"
+            >
+              ✏️ Nueva Gramática
+            </button>
             {exampleGrammars.map((grammar, index) => (
               <button
                 key={index}
@@ -355,7 +366,7 @@ export default function Home() {
         {/* Footer */}
         <footer className="mt-12 text-center text-gray-600 text-sm">
           <p>
-            Aplicación de Análisis de Gramáticas Formales - Universidad Santiago de Chile
+            Aplicación de Análisis de Gramáticas Formales - UPTC
           </p>
           <p className="mt-1">
             Teoría de Lenguajes Formales y Autómatas

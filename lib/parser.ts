@@ -1,4 +1,5 @@
 import { Grammar, ParseResult, DerivationTreeNode } from '@/types/grammar';
+import { splitToSymbols, joinSymbols } from '@/lib/grammarUtils';
 
 /**
  * Clase para el análisis sintáctico de gramáticas
@@ -17,10 +18,16 @@ export class GrammarParser {
    * @returns Resultado del análisis con árbol de derivación si es aceptada
    */
   parse(input: string): ParseResult {
+    const normalized = input === 'ε' ? '' : input.replace(/\s+/g, '');
+    const inputTokens = splitToSymbols(normalized, this.grammar);
+    if (inputTokens === null) {
+      return { accepted: false, message: 'No se pudo tokenizar la entrada con los terminales definidos' };
+    }
+
     if (this.grammar.type === 'Tipo 3') {
-      return this.parseType3(input);
+      return this.parseType3(inputTokens);
     } else {
-      return this.parseType2(input);
+      return this.parseType2(inputTokens);
     }
   }
 
@@ -28,15 +35,15 @@ export class GrammarParser {
    * Parser para Gramáticas Regulares (Tipo 3)
    * Usa un enfoque de análisis bottom-up con búsqueda en anchura
    */
-  private parseType3(input: string): ParseResult {
+  private parseType3(inputTokens: string[]): ParseResult {
     const steps: string[] = [];
-    
+
     // Caso especial: cadena vacía
-    if (input === '') {
+    if (inputTokens.length === 0) {
       const hasEmptyProduction = this.grammar.productions.some(
         p => p.left === this.grammar.startSymbol && (p.right === '' || p.right === 'ε')
       );
-      
+
       if (hasEmptyProduction) {
         const tree: DerivationTreeNode = {
           symbol: this.grammar.startSymbol,
@@ -47,8 +54,8 @@ export class GrammarParser {
           }],
           isTerminal: false
         };
-        return { 
-          accepted: true, 
+        return {
+          accepted: true,
           derivationTree: tree,
           steps: [this.grammar.startSymbol + ' → ε'],
           message: 'Cadena vacía aceptada'
@@ -57,15 +64,14 @@ export class GrammarParser {
       return { accepted: false, message: 'Cadena vacía no aceptada por esta gramática' };
     }
 
-    // BFS para encontrar derivación
     interface State {
-      current: string;
+      current: string[];
       tree: DerivationTreeNode;
       derivation: string[];
     }
 
     const queue: State[] = [{
-      current: this.grammar.startSymbol,
+      current: [this.grammar.startSymbol],
       tree: {
         symbol: this.grammar.startSymbol,
         children: [],
@@ -78,15 +84,18 @@ export class GrammarParser {
     let iterations = 0;
     const maxIterations = 10000;
 
+    const countTerminalTokens = (tokens: string[]) => tokens.reduce((acc, t) => acc + (this.grammar.terminals.includes(t) ? 1 : 0), 0);
+
     while (queue.length > 0 && iterations < maxIterations) {
       iterations++;
       const state = queue.shift()!;
-      
-      if (visited.has(state.current)) continue;
-      visited.add(state.current);
+
+      const stateKey = state.current.join(' ');
+      if (visited.has(stateKey)) continue;
+      visited.add(stateKey);
 
       // Si la cadena actual coincide con la entrada, éxito
-      if (state.current === input) {
+      if (joinSymbols(state.current) === joinSymbols(inputTokens)) {
         return {
           accepted: true,
           derivationTree: state.tree,
@@ -95,8 +104,8 @@ export class GrammarParser {
         };
       }
 
-      // Si la cadena es más larga que la entrada, no continuar
-      if (state.current.length > input.length) continue;
+      // Si la cantidad de terminales supera la de la entrada, no continuar
+      if (countTerminalTokens(state.current) > inputTokens.length) continue;
 
       // Encontrar el primer no terminal
       let nonTerminalIndex = -1;
@@ -115,21 +124,19 @@ export class GrammarParser {
       // Aplicar todas las producciones posibles
       for (const prod of this.grammar.productions) {
         if (prod.left === nonTerminal) {
-          const rightSide = prod.right === 'ε' ? '' : prod.right;
-          const newCurrent = 
-            state.current.substring(0, nonTerminalIndex) + 
-            rightSide + 
-            state.current.substring(nonTerminalIndex + 1);
+          const rightTokens = splitToSymbols(prod.right, this.grammar) || [];
+          const newCurrent = [
+            ...state.current.slice(0, nonTerminalIndex),
+            ...rightTokens,
+            ...state.current.slice(nonTerminalIndex + 1)
+          ];
 
           // Crear nuevo nodo del árbol
-          const newChildren: DerivationTreeNode[] = [];
-          for (const char of rightSide) {
-            newChildren.push({
-              symbol: char,
-              children: [],
-              isTerminal: this.grammar.terminals.includes(char)
-            });
-          }
+          const newChildren: DerivationTreeNode[] = rightTokens.map(tok => ({
+            symbol: tok,
+            children: [],
+            isTerminal: this.grammar.terminals.includes(tok)
+          }));
 
           const newTree = JSON.parse(JSON.stringify(state.tree));
           this.updateTree(newTree, nonTerminal, newChildren);
@@ -143,10 +150,10 @@ export class GrammarParser {
       }
     }
 
-    return { 
-      accepted: false, 
-      message: iterations >= maxIterations 
-        ? 'Límite de iteraciones alcanzado' 
+    return {
+      accepted: false,
+      message: iterations >= maxIterations
+        ? 'Límite de iteraciones alcanzado'
         : 'Cadena no pertenece al lenguaje'
     };
   }
@@ -155,13 +162,13 @@ export class GrammarParser {
    * Parser para Gramáticas Libres de Contexto (Tipo 2)
    * Implementa un parser CYK modificado y búsqueda en anchura
    */
-  private parseType2(input: string): ParseResult {
+  private parseType2(inputTokens: string[]): ParseResult {
     // Caso especial: cadena vacía
-    if (input === '') {
+    if (inputTokens.length === 0) {
       const hasEmptyProduction = this.grammar.productions.some(
         p => p.left === this.grammar.startSymbol && (p.right === '' || p.right === 'ε')
       );
-      
+
       if (hasEmptyProduction) {
         const tree: DerivationTreeNode = {
           symbol: this.grammar.startSymbol,
@@ -172,8 +179,8 @@ export class GrammarParser {
           }],
           isTerminal: false
         };
-        return { 
-          accepted: true, 
+        return {
+          accepted: true,
           derivationTree: tree,
           steps: [this.grammar.startSymbol + ' → ε'],
           message: 'Cadena vacía aceptada'
@@ -182,15 +189,14 @@ export class GrammarParser {
       return { accepted: false, message: 'Cadena vacía no aceptada por esta gramática' };
     }
 
-    // BFS con derivación más izquierda
     interface State {
-      sententialForm: string;
+      sententialForm: string[];
       tree: DerivationTreeNode;
       steps: string[];
     }
 
     const queue: State[] = [{
-      sententialForm: this.grammar.startSymbol,
+      sententialForm: [this.grammar.startSymbol],
       tree: {
         symbol: this.grammar.startSymbol,
         children: [],
@@ -207,12 +213,12 @@ export class GrammarParser {
       iterations++;
       const state = queue.shift()!;
       
-      const stateKey = state.sententialForm;
+      const stateKey = state.sententialForm.join(' ');
       if (visited.has(stateKey)) continue;
       visited.add(stateKey);
 
       // Verificar si llegamos a la cadena objetivo
-      if (state.sententialForm === input) {
+      if (joinSymbols(state.sententialForm) === joinSymbols(inputTokens)) {
         return {
           accepted: true,
           derivationTree: state.tree,
@@ -222,14 +228,14 @@ export class GrammarParser {
       }
 
       // Si solo quedan terminales y no coincide, descartar
-      const hasNonTerminal = state.sententialForm.split('').some(
-        char => this.grammar.nonTerminals.includes(char)
+      const hasNonTerminal = state.sententialForm.some(
+        token => this.grammar.nonTerminals.includes(token)
       );
       
       if (!hasNonTerminal) continue;
 
-      // Limitar longitud para evitar explosión
-      if (state.sententialForm.length > input.length * 2) continue;
+      // Limitar longitud para evitar explosión (en tokens)
+      if (state.sententialForm.length > inputTokens.length * 2) continue;
 
       // Encontrar el primer no terminal (derivación más izquierda)
       let firstNonTerminal = '';
@@ -248,22 +254,20 @@ export class GrammarParser {
       // Aplicar todas las producciones del primer no terminal
       for (const prod of this.grammar.productions) {
         if (prod.left === firstNonTerminal) {
-          const rightSide = prod.right === 'ε' ? '' : prod.right;
+          const rightTokens = splitToSymbols(prod.right, this.grammar) || [];
           
-          const newSententialForm = 
-            state.sententialForm.substring(0, firstNonTerminalIndex) +
-            rightSide +
-            state.sententialForm.substring(firstNonTerminalIndex + 1);
+          const newSententialForm = [
+            ...state.sententialForm.slice(0, firstNonTerminalIndex),
+            ...rightTokens,
+            ...state.sententialForm.slice(firstNonTerminalIndex + 1)
+          ];
 
           // Construir hijos del árbol
-          const newChildren: DerivationTreeNode[] = [];
-          for (const char of rightSide) {
-            newChildren.push({
-              symbol: char,
-              children: [],
-              isTerminal: this.grammar.terminals.includes(char)
-            });
-          }
+          const newChildren: DerivationTreeNode[] = rightTokens.map(t => ({
+            symbol: t,
+            children: [],
+            isTerminal: this.grammar.terminals.includes(t)
+          }));
 
           // Clonar y actualizar árbol
           const newTree = JSON.parse(JSON.stringify(state.tree));
@@ -278,10 +282,10 @@ export class GrammarParser {
       }
     }
 
-    return { 
-      accepted: false, 
-      message: iterations >= maxIterations 
-        ? 'Límite de iteraciones alcanzado' 
+    return {
+      accepted: false,
+      message: iterations >= maxIterations
+        ? 'Límite de iteraciones alcanzado'
         : 'Cadena no pertenece al lenguaje'
     };
   }

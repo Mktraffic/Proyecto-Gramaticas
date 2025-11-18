@@ -208,7 +208,7 @@ Cadenas aceptadas: ε, a, b, aa, bb, aba, bab, aaa, ...
 ## 📧 Autor
 
 Proyecto desarrollado para el curso de Teoría de Lenguajes Formales y Autómatas
-Universidad de Santiago de Chile
+UPTC - Universidad Pedagógica y Tecnológica de Colombia
 
 ## 📄 Licencia
 

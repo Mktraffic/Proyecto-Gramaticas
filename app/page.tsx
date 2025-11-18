@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Grammar, ParseResult } from '@/types/grammar';
 import { GrammarParser } from '@/lib/parser';
 import { StringGenerator } from '@/lib/generator';
@@ -14,6 +14,8 @@ import {
 import GrammarForm from '@/components/GrammarForm';
 import DerivationTree from '@/components/DerivationTree';
 
+const STORAGE_KEY = 'saved_grammars';
+
 export default function Home() {
   const [currentGrammar, setCurrentGrammar] = useState<Grammar | null>(null);
   const [showForm, setShowForm] = useState(true);
@@ -21,12 +23,36 @@ export default function Home() {
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [generatedStrings, setGeneratedStrings] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'parse' | 'generate'>('parse');
+  const [savedGrammars, setSavedGrammars] = useState<Grammar[]>([]);
+  const [showSavedGrammars, setShowSavedGrammars] = useState(false);
+
+  // Cargar gramáticas guardadas al montar el componente
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        setSavedGrammars(JSON.parse(saved));
+      } catch (error) {
+        console.error('Error al cargar gramáticas guardadas:', error);
+      }
+    }
+  }, []);
+
+  // Guardar gramáticas en localStorage cuando cambien
+  const saveToLocalStorage = (grammars: Grammar[]) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(grammars));
+    setSavedGrammars(grammars);
+  };
 
   const handleSaveGrammar = (grammar: Grammar) => {
     setCurrentGrammar(grammar);
     setShowForm(false);
     setParseResult(null);
     setGeneratedStrings([]);
+    
+    // Guardar en localStorage
+    const existing = savedGrammars.filter(g => g.name !== grammar.name);
+    saveToLocalStorage([...existing, grammar]);
   };
 
   const handleLoadExample = (grammar: Grammar) => {
@@ -75,6 +101,19 @@ export default function Home() {
     setGeneratedStrings(strings.map(s => s.value));
   };
 
+  const handleDeleteSavedGrammar = (grammarName: string) => {
+    const updated = savedGrammars.filter(g => g.name !== grammarName);
+    saveToLocalStorage(updated);
+  };
+
+  const handleLoadSavedGrammar = (grammar: Grammar) => {
+    setCurrentGrammar(grammar);
+    setShowForm(false);
+    setParseResult(null);
+    setGeneratedStrings([]);
+    setShowSavedGrammars(false);
+  };
+
   return (
     <div className="min-h-screen py-8 px-4">
       <div className="max-w-7xl mx-auto">
@@ -90,7 +129,17 @@ export default function Home() {
 
         {/* Grammar Examples */}
         <div className="mb-6 bg-white rounded-lg shadow-lg p-4">
-          <h3 className="text-lg font-semibold mb-3 text-gray-800">Gramáticas de Ejemplo:</h3>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-lg font-semibold text-gray-800">Gramáticas de Ejemplo:</h3>
+            {savedGrammars.length > 0 && (
+              <button
+                onClick={() => setShowSavedGrammars(!showSavedGrammars)}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-semibold text-sm"
+              >
+                📚 Mis Gramáticas ({savedGrammars.length})
+              </button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
@@ -114,6 +163,67 @@ export default function Home() {
             ))}
           </div>
         </div>
+
+        {/* Saved Grammars Modal */}
+        {showSavedGrammars && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-800">Mis Gramáticas Guardadas</h2>
+                <button
+                  onClick={() => setShowSavedGrammars(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                {savedGrammars.length === 0 ? (
+                  <p className="text-gray-600 text-center py-8">No hay gramáticas guardadas</p>
+                ) : (
+                  <div className="space-y-3">
+                    {savedGrammars.map((grammar, index) => (
+                      <div
+                        key={index}
+                        className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 transition-colors"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-bold text-lg text-gray-800">{grammar.name}</h3>
+                            <p className="text-sm text-gray-600">{grammar.type}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleLoadSavedGrammar(grammar)}
+                              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                            >
+                              Cargar
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`¿Eliminar "${grammar.name}"?`)) {
+                                  handleDeleteSavedGrammar(grammar.name);
+                                }
+                              }}
+                              className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-700">
+                          <span className="font-semibold">N:</span> {grammar.nonTerminals.join(', ')} | 
+                          <span className="font-semibold ml-2">T:</span> {grammar.terminals.join(', ')} | 
+                          <span className="font-semibold ml-2">P:</span> {grammar.productions.length} producciones
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Current Grammar Display */}
         {currentGrammar && !showForm && (
